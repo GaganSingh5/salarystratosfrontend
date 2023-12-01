@@ -13,31 +13,69 @@ import {
   Tab,
   Tabs,
 } from "react-bootstrap";
+import Multiselect from "../components/Multiselect";
 
-function SearchPage() {
+function SalaryStratos() {
   const [searchInput, setSearchInput] = useState("");
   const [jobList, setJobList] = useState([]);
   const [suggestedWords, setSuggestedWords] = useState([]);
   const [recentSearch, setRecentSearch] = useState([]);
   const [correctWords, setCorrectWords] = useState([]);
   const [triggerRecentSearch, setTriggerRecentSearch] = useState(true);
+  const [crawlInput, setCrawlInput] = useState({});
+ const setCrawlInputValues = (data)=>{
+   setCrawlInput((currentState) => {
+        return { ...currentState, "searchTerms": data };
+      });
+ }
+  const crawl = (event) => {
+    console.log(typeof event);
+    
+    if (!event) return
+    if (event.target.id == "job-SimplyHired") {
+      setCrawlInput((currentState) => {
+        return { ...currentState, simplyHired: event.target.checked };
+      });
+    } else if (event.target.id == "job-RemoteOk") {
+      setCrawlInput((currentState) => {
+        return { ...currentState, remoteOk: event.target.checked };
+      });
+    } else if (event.target.id == "job-GlassDoor") {
+      setCrawlInput((currentState) => {
+        return { ...currentState, glassDoor: event.target.checked };
+      });
+    }
+  };
 
-  const getJobs = ( searchTerms ) => {
-       fetch("http://localhost:8080/api/pageRanking/searchJobs", {
-         method: "POST",
-         headers: new Headers({
-           "Content-Type": "application/x-www-form-urlencoded", // <-- Specifying the Content-Type
-         }),
-         body: `searchTerm=${searchTerms}`,
-       }).then(async (data) => {
-         const response = await data.json();
-         console.log(response);
-         setJobList(response["dataList"]);
-         setTriggerRecentSearch((currentState) => {
-          return !currentState;
-         });
-       });
+  const onCrawl = ()=>{
+    fetch("http://localhost:8080/api/crawl", {
+      method: "POST",
+      headers: new Headers({
+        "Content-Type": "application/json", // <-- Specifying the Content-Type
+      }),
+      body: JSON.stringify(crawlInput),
+    }).then(async (data) => {
+      const response = await data.json();
+      console.log(response);
+    });
   }
+
+  const getJobs = (searchTerms) => {
+    fetch("http://localhost:8080/api/pageRanking/searchJobs", {
+      method: "POST",
+      headers: new Headers({
+        "Content-Type": "application/x-www-form-urlencoded", // <-- Specifying the Content-Type
+      }),
+      body: `searchTerm=${searchTerms}`,
+    }).then(async (data) => {
+      const response = await data.json();
+      console.log(response);
+      setJobList(response["dataList"]);
+      setTriggerRecentSearch((currentState) => {
+        return !currentState;
+      });
+    });
+  };
 
   const onSearch = () => {
     fetch("http://localhost:8080/api/correctWords", {
@@ -59,7 +97,6 @@ function SearchPage() {
 
       correctWords = correctWords.join(" ");
       getJobs(correctWords);
-
     });
   };
 
@@ -326,22 +363,26 @@ function SearchPage() {
         </Tab>
         <Tab eventKey="crawler" title="Crawler">
           <Row className="vw-90 mb-3" xs="auto">
+            <Col lg={12} className="mb-2">
+              <Multiselect setCrawlInput={setCrawlInputValues} />
+            </Col>
             <Col className="d-flex align-items-center">
               <Form className="d-flex">
                 {["SimplyHired", "RemoteOk", "GlassDoor"].map((type) => (
                   <div key={`job-${type}`}>
-                    <Form.Check // prettier-ignore
+                    <Form.Check
                       type="checkbox"
                       id={`job-${type}`}
                       label={`${type}`}
                       className="mx-2"
+                      onChange={(e) => crawl(e)}
                     />
                   </div>
                 ))}
               </Form>
             </Col>
             <Col className="d-flex pl-2 align-middle">
-              <Button onClick={() => null} variant="primary">
+              <Button onClick={() => onCrawl()} variant="primary">
                 Crawl
               </Button>
             </Col>
@@ -352,4 +393,4 @@ function SearchPage() {
   );
 }
 
-export default SearchPage;
+export default SalaryStratos;

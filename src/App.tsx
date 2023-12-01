@@ -1,12 +1,10 @@
 
 import './App.css'
-import SearchPage from './pages/SearchPage'
+import SalaryStratos from './pages/SalaryStratos'
 
 function App() {
 
-  return (
-      <SearchPage />
-  )
+  return <SalaryStratos />;
 }
 
 export default App
