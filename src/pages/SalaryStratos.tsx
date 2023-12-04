@@ -18,20 +18,42 @@ import Multiselect from "../components/Multiselect";
 function SalaryStratos() {
   const [searchInput, setSearchInput] = useState("");
   const [jobList, setJobList] = useState([]);
+  const [topJobList, setTopJobList] = useState([]);
   const [suggestedWords, setSuggestedWords] = useState([]);
   const [recentSearch, setRecentSearch] = useState([]);
   const [correctWords, setCorrectWords] = useState([]);
   const [triggerRecentSearch, setTriggerRecentSearch] = useState(true);
   const [crawlInput, setCrawlInput] = useState({});
- const setCrawlInputValues = (data)=>{
-   setCrawlInput((currentState) => {
-        return { ...currentState, "searchTerms": data };
-      });
- }
+  const [runTimes, setRunTimes] = useState({
+    quickSort: 0,
+    binarySearch: 0,
+    mergeSort: 0,
+  });
+  const [invalidSearch, setInvalidSearch] = useState(false);
+
+  const getRunTimes = (searchTerms) => {
+    fetch("http://localhost:8080/api/runTimes", {
+      method: "POST",
+      headers: new Headers({
+        "Content-Type": "application/x-www-form-urlencoded", // <-- Specifying the Content-Type
+      }),
+      body: `searchTerm=${searchTerms}`,
+    }).then(async (data) => {
+      const response = await data.json();
+      console.log(response);
+      setRunTimes(response);
+    });
+  };
+
+  const setCrawlInputValues = (data) => {
+    setCrawlInput((currentState) => {
+      return { ...currentState, searchTerms: data };
+    });
+  };
   const crawl = (event) => {
     console.log(typeof event);
-    
-    if (!event) return
+
+    if (!event) return;
     if (event.target.id == "job-SimplyHired") {
       setCrawlInput((currentState) => {
         return { ...currentState, simplyHired: event.target.checked };
@@ -44,10 +66,14 @@ function SalaryStratos() {
       setCrawlInput((currentState) => {
         return { ...currentState, glassDoor: event.target.checked };
       });
+    } else if (event.target.id == "job-DeleteJSON") {
+      setCrawlInput((currentState) => {
+        return { ...currentState, delete: event.target.checked };
+      });
     }
   };
 
-  const onCrawl = ()=>{
+  const onCrawl = () => {
     fetch("http://localhost:8080/api/crawl", {
       method: "POST",
       headers: new Headers({
@@ -58,7 +84,7 @@ function SalaryStratos() {
       const response = await data.json();
       console.log(response);
     });
-  }
+  };
 
   const getJobs = (searchTerms) => {
     fetch("http://localhost:8080/api/pageRanking/searchJobs", {
@@ -69,7 +95,7 @@ function SalaryStratos() {
       body: `searchTerm=${searchTerms}`,
     }).then(async (data) => {
       const response = await data.json();
-      console.log(response);
+      console.log("JobData", response);
       setJobList(response["dataList"]);
       setTriggerRecentSearch((currentState) => {
         return !currentState;
@@ -77,35 +103,85 @@ function SalaryStratos() {
     });
   };
 
+  const getTopJobs = (searchTerms) => {
+    fetch("http://localhost:8080/api/pageRanking/searchJobs", {
+      method: "POST",
+      headers: new Headers({
+        "Content-Type": "application/x-www-form-urlencoded", // <-- Specifying the Content-Type
+      }),
+      body: `searchTerm=${searchTerms}&sortBy=salary`,
+    }).then(async (data) => {
+      const response = await data.json();
+      console.log(response);
+      setTopJobList(response["dataList"]);
+    });
+  };
+
   const onSearch = () => {
+    setInvalidSearch(false);
     fetch("http://localhost:8080/api/correctWords", {
       method: "POST",
       headers: new Headers({
         "Content-Type": "application/x-www-form-urlencoded", // <-- Specifying the Content-Type
       }),
-      body: `searchTerm=${searchInput}&suggestionCount=${5}`,
+      body: `searchTerm=${searchInput}&suggestionCount=${6}`,
     }).then(async (data) => {
       const response = await data.json();
-      console.log(response);
-      setCorrectWords(response);
+      console.log("Correct Words: ", response);
+      if (
+        response.length == 1 &&
+        (response[0].isValidResponse == false ||
+          response[0].validResponse == false)
+      ) {
+        setRunTimes({
+          quickSort: 0,
+          binarySearch: 0,
+          mergeSort: 0,
+        });
+        setJobList([]);
+        setTopJobList([]);
+        setInvalidSearch(true);
+        setCorrectWords([]);
+      } else {
+        setCorrectWords(response);
 
-      let correctWords = response.map((data) => {
-        if (data.correctWords == null) {
-          return data.word;
+        let correctWords = response
+          .map((data) => {
+            if (data.correctWords == null) {
+              return data.word;
+            }
+          })
+          .filter((data) => data != undefined);
+
+        console.log("correct:", correctWords.length);
+
+        if (correctWords.length == 0) {
+          setRunTimes({
+            quickSort: 0,
+            binarySearch: 0,
+            mergeSort: 0,
+          });
+          setJobList([]);
+          setTopJobList([]);
+          setInvalidSearch(true);
+          return;
         }
-      });
-
-      correctWords = correctWords.join(" ");
-      getJobs(correctWords);
+        correctWords = correctWords.join(" ");
+        getRunTimes(correctWords);
+        getTopJobs(correctWords);
+        getJobs(correctWords);
+      }
     });
   };
 
   useEffect(() => {
+    console.log("recent useEffect");
+
     fetch("http://localhost:8080/api/recentSearches", {
       method: "Get",
     }).then(async (data) => {
       const response = await data.json();
-      console.log(response);
+      console.log("recent", response);
       setRecentSearch(response["dataList"]);
     });
   }, [triggerRecentSearch]);
@@ -116,7 +192,7 @@ function SalaryStratos() {
       fetch("http://localhost:8080/api/wordSuggestions", {
         method: "POST",
         headers: new Headers({
-          "Content-Type": "application/x-www-form-urlencoded", // <-- Specifying the Content-Type
+          "Content-Type": "application/x-www-form-urlencoded",
         }),
         body: `searchTerm=${searchInput}&suggestionCount=${5}`,
       }).then(async (data) => {
@@ -145,23 +221,13 @@ function SalaryStratos() {
     return () => clearTimeout(timeoutFunction);
   }, [searchInput]);
 
-  // const searchForJobs = () => {
-  //   fetch("http://localhost:8080/api/wordSuggestions", {
-  //     method: "POST",
-  //     body: searchInput,
-  //   }).then(async (data) => {
-  //     const result = await data.json();
-  //     console.log(result);
-  //   });
-  // };
-
   return (
-    <Container className="vw-100 p-4 justify-center align-items-start">
+    <Container className="vw-100 py-4 justify-center align-items-start">
       <h2 className="text-center">Salary Stratos</h2>
       <Tabs defaultActiveKey="searchEngine" className="mb-3">
         <Tab eventKey="searchEngine" title="Search Engine">
-          <Row className="vw-90 mb-3" xs="auto">
-            <Col lg={5} className="vw-60 px-0">
+          <Row className="mb-3" xs="auto">
+            <Col lg={10} className="px-0">
               <Form>
                 <Form.Group className="w-100" controlId="jobSearch">
                   <Form.Control
@@ -169,61 +235,62 @@ function SalaryStratos() {
                     type="text"
                     placeholder="Enter keywords to search"
                     value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
+                    onChange={(e) => {
+                      setSearchInput(e.target.value);
+                      setSuggestedWords([]);
+                      setCorrectWords([]);
+                      setJobList([]);
+                      setTopJobList([]);
+                    }}
                   />
+                  {invalidSearch && (
+                    <Form.Text muted>
+                      Cannot be empty or have Invalid terms.
+                    </Form.Text>
+                  )}
                 </Form.Group>
               </Form>
             </Col>
-            <Col lg={1} className="pl-2">
-              <Button
-                className="p-3"
-                onClick={() => onSearch()}
-                variant="primary"
-              >
+            <Col lg={2} className="pl-2">
+              <Button className="" onClick={() => onSearch()} variant="primary">
                 Search
               </Button>
             </Col>
-            <Col lg={6} className="p-0">
-              <Card>
-                <Card.Body>
-                  <Card.Title>Recent Searches With Frequency Count</Card.Title>
-                  <Card.Text>
-                    <Stack
-                      style={{ flexWrap: "wrap" }}
-                      direction="horizontal"
-                      gap={2}
-                    >
-                      {recentSearch.map((word) => {
-                        return (
-                          <ListGroup>
-                            <ListGroup.Item>
-                              Frequency: {word["frequency"]}
-                            </ListGroup.Item>
-                            <ListGroup.Item>
-                              <Badge
-                                className="badge rounded-pill"
-                                bg="primary"
-                              >
-                                {word["word"]}
-                              </Badge>
-                            </ListGroup.Item>
-                          </ListGroup>
-                        );
-                      })}
-                    </Stack>
-                  </Card.Text>
-                </Card.Body>
-              </Card>
-            </Col>
           </Row>
           <Row className="mb-2">
-            <Card>
+            <Card className="mb-2">
+              <Card.Body>
+                <Card.Title>Recent Searches With Frequency Count</Card.Title>
+                <Card.Text>
+                  <Stack
+                    style={{ flexWrap: "wrap" }}
+                    direction="horizontal"
+                    gap={2}
+                  >
+                    {recentSearch.map((word) => {
+                      return (
+                        <ListGroup>
+                          <ListGroup.Item>
+                            Frequency: {word["frequency"]}
+                          </ListGroup.Item>
+                          <ListGroup.Item>
+                            <Badge className="badge rounded-pill" bg="primary">
+                              {word["word"]}
+                            </Badge>
+                          </ListGroup.Item>
+                        </ListGroup>
+                      );
+                    })}
+                  </Stack>
+                </Card.Text>
+              </Card.Body>
+            </Card>
+            <Card className="mb-2">
               <Card.Body>
                 <Card.Title>Word Suggestions</Card.Title>
 
                 {suggestedWords.map((data) => {
                   const sugg = data.suggestions.dataList;
-                  console.log(sugg);
 
                   const badges = sugg.map((wordData) => {
                     return (
@@ -294,19 +361,18 @@ function SalaryStratos() {
                           );
                         }
                       );
-                      console.log(result);
 
                       return (
-                        <>
-                          <h5 className="d-flex">{word.word}</h5>
+                        <div className="py-2">
+                          <h5 className="d-flex">{word.word}: </h5>
                           <Stack direction="horizontal" gap={2}>
                             {result}
                           </Stack>
-                        </>
+                        </div>
                       );
                     } else {
                       return (
-                        <div>
+                        <div className="py-2">
                           <h5>{word.word}:</h5>
                           <p>Search term is correct</p>
                         </div>
@@ -319,46 +385,229 @@ function SalaryStratos() {
           </Row>
           <Row
             style={{
-              padding: "2rem",
               marginTop: "2rem",
-              border: "1px solid lightgray",
-              borderRadius: "0.5rem",
             }}
           >
-            {jobList.length > 0 ? (
-              jobList.map((data) => {
-                return (
-                  <Card style={{ minHeight: "100px", marginBottom: "2rem" }}>
-                    <Card.Body>
-                      <Row>
-                        <Col>
-                          <Card.Title>{data.jobTitle}</Card.Title>
-                        </Col>
-                        <Col style={{ textAlign: "end" }}>
-                          <Card.Title>
-                            {data.word}: {data.wordFrequency}
-                          </Card.Title>
-                        </Col>
-                      </Row>
+            <Card className="mb-2">
+              <Card.Body>
+                <Row>
+                  <Card.Title>
+                    Time taken by
+                  </Card.Title>
+                  <Col lg={4}>
+                    <Card.Title>
+                      QuickSort: {runTimes.quickSort} ns
+                    </Card.Title>
+                  </Col>
+                  <Col lg={4}>
+                    <Card.Title>
+                      MergeSort: {runTimes.mergeSort} ns
+                    </Card.Title>
+                  </Col>
+                  <Col lg={4}>
+                    <Card.Title>
+                      SortedArray: {runTimes.binarySearch} ns
+                    </Card.Title>
+                  </Col>
+                </Row>
+              </Card.Body>
+            </Card>
+          </Row>
+          <Row
+            style={{
+              marginTop: "2rem",
+            }}
+          >
+            <h3>Page Ranking</h3>
+          </Row>
+          <Row
+            style={{
+              padding: "2rem",
+              border: "1px solid lightgray",
+              borderRadius: "0.5rem",
+              maxHeight: "600px",
+              overflowY: "auto",
+            }}
+          >
+            <Col>
+              {jobList.length > 0 ? (
+                jobList.map((data, index) => {
+                  return (
+                    <Card style={{ minHeight: "100px", marginBottom: "2rem" }}>
+                      <Card.Body>
+                        <Row className="my-2">
+                          <Col>
+                            <Badge className="badge rounded-pill" bg="primary">
+                              <b>Rank: </b>
+                              {index + 1}
+                            </Badge>
+                          </Col>
+                        </Row>
+                        <Row>
+                          <Col lg={8}>
+                            <Card.Title>{data.jobTitle}</Card.Title>
+                          </Col>
+                          <Col lg={4}>
+                            <Card.Title>
+                              <ListGroup>
+                                <ListGroup.Item>
+                                  Search term occurrences: {data.wordFrequency}
+                                </ListGroup.Item>
+                                <ListGroup.Item>
+                                  <Stack direction="horizontal" gap={2}>
+                                    {data.word.split(", ").map((word) => {
+                                      return (
+                                        <Badge
+                                          className="badge rounded-pill"
+                                          bg="primary"
+                                        >
+                                          {word}
+                                        </Badge>
+                                      );
+                                    })}
+                                  </Stack>
+                                </ListGroup.Item>
+                              </ListGroup>
+                            </Card.Title>
+                          </Col>
+                        </Row>
 
-                      <Row>
-                        <Col>{data.location}</Col>
-                        <Col style={{ textAlign: "end" }}>{data.maxSalary}</Col>
-                      </Row>
-                      <Card.Text></Card.Text>
-                      <Accordion>
-                        <Accordion.Item eventKey="0">
-                          <Accordion.Header>Description</Accordion.Header>
-                          <Accordion.Body>{data.jobDescription}</Accordion.Body>
-                        </Accordion.Item>
-                      </Accordion>
-                    </Card.Body>
-                  </Card>
-                );
-              })
-            ) : (
-              <h3 className="text-center">No Jobs to show</h3>
-            )}
+                        <Row>
+                          <Col>
+                            <b>Location: </b>
+                            {data.location}
+                          </Col>
+                          <Col style={{ textAlign: "end" }}>
+                            <b>Salary: </b>
+                            {data.maxSalary}
+                          </Col>
+                        </Row>
+                        <Card.Text></Card.Text>
+                        <Accordion>
+                          <Accordion.Item eventKey="0">
+                            <Accordion.Header>Description</Accordion.Header>
+                            <Accordion.Body>
+                              {data.jobDescription}
+                            </Accordion.Body>
+                          </Accordion.Item>
+                        </Accordion>
+                        <Row className="mt-2">
+                          <Col lg={6}>
+                            <a
+                              href={data.jobWebsiteLink}
+                              className="btn btn-primary"
+                              target="_blank"
+                            >
+                              {data.jobWebsiteName}
+                            </a>
+                          </Col>
+                        </Row>
+                      </Card.Body>
+                    </Card>
+                  );
+                })
+              ) : (
+                <h3 className="text-center">No Jobs to show</h3>
+              )}
+            </Col>
+          </Row>
+          <Row
+            style={{
+              marginTop: "2rem",
+            }}
+          >
+            <h3>Top Ranking Jobs by Salary</h3>
+          </Row>
+          <Row
+            style={{
+              padding: "2rem",
+              border: "1px solid lightgray",
+              borderRadius: "0.5rem",
+              maxHeight: "600px",
+              overflowY: "auto",
+            }}
+          >
+            <Col>
+              {topJobList.length > 0 ? (
+                topJobList.map((data, index) => {
+                  return (
+                    <Card style={{ minHeight: "100px", marginBottom: "2rem" }}>
+                      <Card.Body>
+                        <Row className="my-2">
+                          <Col>
+                            <Badge className="badge rounded-pill" bg="primary">
+                              <b>Rank: </b>
+                              {index + 1}
+                            </Badge>
+                          </Col>
+                        </Row>
+                        <Row>
+                          <Col lg={8}>
+                            <Card.Title>{data.jobTitle}</Card.Title>
+                          </Col>
+                          <Col lg={4}>
+                            <Card.Title>
+                              <ListGroup>
+                                <ListGroup.Item>
+                                  Search term occurrences: {data.wordFrequency}
+                                </ListGroup.Item>
+                                <ListGroup.Item>
+                                  <Stack direction="horizontal" gap={2}>
+                                    {data.word.split(", ").map((word) => {
+                                      return (
+                                        <Badge
+                                          className="badge rounded-pill"
+                                          bg="primary"
+                                        >
+                                          {word}
+                                        </Badge>
+                                      );
+                                    })}
+                                  </Stack>
+                                </ListGroup.Item>
+                              </ListGroup>
+                            </Card.Title>
+                          </Col>
+                        </Row>
+
+                        <Row>
+                          <Col>
+                            <b>Location: </b>
+                            {data.location}
+                          </Col>
+                          <Col style={{ textAlign: "end" }}>
+                            <b>Salary: </b>
+                            {data.maxSalary}
+                          </Col>
+                        </Row>
+                        <Card.Text></Card.Text>
+                        <Accordion>
+                          <Accordion.Item eventKey="0">
+                            <Accordion.Header>Description</Accordion.Header>
+                            <Accordion.Body>
+                              {data.jobDescription}
+                            </Accordion.Body>
+                          </Accordion.Item>
+                        </Accordion>
+                        <Row className="mt-2">
+                          <Col lg={6}>
+                            <a
+                              href={data.jobWebsiteLink}
+                              className="btn btn-primary"
+                              target="_blank"
+                            >
+                              {data.jobWebsiteName}
+                            </a>
+                          </Col>
+                        </Row>
+                      </Card.Body>
+                    </Card>
+                  );
+                })
+              ) : (
+                <h3 className="text-center">No Jobs to show</h3>
+              )}
+            </Col>
           </Row>
         </Tab>
         <Tab eventKey="crawler" title="Crawler">
@@ -368,17 +617,19 @@ function SalaryStratos() {
             </Col>
             <Col className="d-flex align-items-center">
               <Form className="d-flex">
-                {["SimplyHired", "RemoteOk", "GlassDoor"].map((type) => (
-                  <div key={`job-${type}`}>
-                    <Form.Check
-                      type="checkbox"
-                      id={`job-${type}`}
-                      label={`${type}`}
-                      className="mx-2"
-                      onChange={(e) => crawl(e)}
-                    />
-                  </div>
-                ))}
+                {["SimplyHired", "RemoteOk", "GlassDoor", "DeleteJSON"].map(
+                  (type) => (
+                    <div key={`job-${type}`}>
+                      <Form.Check
+                        type="checkbox"
+                        id={`job-${type}`}
+                        label={`${type}`}
+                        className="mx-2"
+                        onChange={(e) => crawl(e)}
+                      />
+                    </div>
+                  )
+                )}
               </Form>
             </Col>
             <Col className="d-flex pl-2 align-middle">

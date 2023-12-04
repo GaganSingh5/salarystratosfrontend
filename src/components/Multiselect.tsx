@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import './Multiselect.css'; // You can create a CSS file for styling
 import { Form } from 'react-bootstrap';
 
@@ -37,11 +37,11 @@ const Multiselect = ({setCrawlInput}) => {
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
       />
-      <div className="chip-container">
+      <div className="chip-container mt-2">
         {selectedItems.map((item, index) => (
           <div
             key={index}
-            className="chip primary"
+            className="chip btn btn-primary"
             onClick={() => removeChip(item)}
           >
             {item}
